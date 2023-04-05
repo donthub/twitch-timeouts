@@ -70,12 +70,18 @@ class IrcReader {
     #socketAddress = "wss://irc-ws.chat.twitch.tv/";
     #channelRegex = /.*twitch\.tv\/(\w+)/;
     #timeoutRegex = /@(ban-duration=(\d+))?.+ CLEARCHAT #\w+ :(.+)/;
+    #messageRegex = /@.*name=(.*?);.* PRIVMSG #\w+ :(.+)/;
     #username = `justinfan${Math.floor(Math.random() * 100000)}`; // Twitch default for anonymous users
     #password = "SCHMOOPIIE"; // Twitch default for anonymous users
     #formatter = new Formatter();
+    #lastMessage = {};
 
     #printTimeout(user, duration) {
         let message = duration ? `${user} was timed out for ${this.#formatter.calculateDuration(duration)}.` : `${user} was permanently banned.`;
+        let lastMessage = this.#lastMessage[user];
+        if (lastMessage) {
+            message = `${message} Last message: ${lastMessage}`;
+        }
         let line = document.createElement("div");
         line.classList.add("chat-line__status");
         let span = document.createElement("span");
@@ -103,6 +109,13 @@ class IrcReader {
         socket.addEventListener("message", (event) => {
             if (event.data.startsWith("PING")) {
                 socket.send("PONG");
+            }
+
+            let messageFound = event.data.match(this.#messageRegex);
+            if (messageFound) {
+                let name = messageFound[1].toLowerCase();
+                let message = messageFound[2];
+                this.#lastMessage[name] = message;
             }
 
             let timeoutFound = event.data.match(this.#timeoutRegex);
