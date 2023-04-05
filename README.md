@@ -2,18 +2,14 @@
 
 ## Setup
 
-Import or copy-paste contents of [Twitch timeouts.user.js](https://github.com/donthub/twitch-timeouts/blob/main/Twitch%20timeouts.user.js) into the UserScript manager of your choice (e.g. [TamperMonkey](https://www.tampermonkey.net/)).
+Import or copy-paste contents of [Twitch timeouts.user.js](https://github.com/donthub/twitch-timeouts/blob/main/Twitch%20timeouts.user.js) into the UserScript manager of your choice (e.g. [ViolentMonkey](https://violentmonkey.github.io/)).
 
 ## Usage
 
-Timeouts and bans will appear in Twitch chat automatically, e.g.:
+Timeouts and bans will appear in Twitch chat automatically, along with the user's last message e.g.:
 
-> testuser was timed out for 10 minutes (600 seconds).
-
-and
-
-> testuser was banned permanently.
+![Sample](sample.png)
 
 ## How does it work?
 
-The userscript creates a WebSocket connection to Twitch IRC servers, logs in as anonymous user to the Twitch channel's IRC channel, and looks for `CLEARCHAT` messages that are triggered by user timeouts. When found, it prints the user and duration to the Twitch chat.
+The userscript creates a WebSocket connection to Twitch IRC servers, logs in as anonymous user to the Twitch channel's IRC channel. For each user, it saves their last message, as well as looks for `CLEARCHAT` messages that are triggered by user timeouts. When found, it prints the user, duration of the timeout and last message to the Twitch chat.
