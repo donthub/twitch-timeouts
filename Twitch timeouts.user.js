@@ -66,6 +66,43 @@ class Formatter {
     }
 };
 
+class Chat {
+    #customClass = "twitch-timeout";
+    #chatLogSelector = "#live-page-chat [role=log]";
+    #formatter = new Formatter();
+
+    printTimeout(user, duration, lastMessage) {
+        let message = duration ? `<strong>${user}</strong> <em>was timed out for</em> <strong>${this.#formatter.calculateDuration(duration)}</strong>.` : `<strong>${user}</strong> <em>was</em> <strong>permanently banned</strong>.`;
+        if (lastMessage) {
+            let lastMessageHtml = document.createElement('div')
+                .appendChild(document.createTextNode(lastMessage))
+                .parentNode
+                .innerHTML;
+            message = `${message} <em>Last message:</em><br/>${lastMessageHtml}`;
+        }
+        let line = document.createElement("div");
+        line.classList.add("chat-line__status", this.#customClass);
+        line.style.backgroundColor = "rgba(255, 0, 0, 0.3)";
+        let span = document.createElement("span");
+        span.innerHTML = message;
+        line.appendChild(span);
+        let element = document.querySelector(this.#chatLogSelector);
+        element.appendChild(line);
+    }
+
+    /**
+    * Remove old timeout message at the top of the chat log.
+    */
+    removeOldTimeout() {
+        let element = document.querySelector(this.#chatLogSelector);
+        let firstChild = element.firstChild;
+        if (firstChild?.classList.contains(this.#customClass)) {
+            firstChild.remove();
+        }
+    }
+
+};
+
 class IrcReader {
     #socketAddress = "wss://irc-ws.chat.twitch.tv/";
     #channelRegex = /.*twitch\.tv\/(\w+)/;
@@ -73,23 +110,8 @@ class IrcReader {
     #messageRegex = /@.*name=(.*?);.* PRIVMSG #\w+ :(.+)/;
     #username = `justinfan${Math.floor(Math.random() * 100000)}`; // Twitch default for anonymous users
     #password = "SCHMOOPIIE"; // Twitch default for anonymous users
-    #formatter = new Formatter();
+    #chat = new Chat();
     #lastMessage = {};
-
-    #printTimeout(user, duration) {
-        let message = duration ? `${user} was timed out for ${this.#formatter.calculateDuration(duration)}.` : `${user} was permanently banned.`;
-        let lastMessage = this.#lastMessage[user];
-        if (lastMessage) {
-            message = `${message} Last message: ${lastMessage}`;
-        }
-        let line = document.createElement("div");
-        line.classList.add("chat-line__status");
-        let span = document.createElement("span");
-        span.innerText = message;
-        line.appendChild(span);
-        let element = document.querySelector("#live-page-chat [role=log]")
-        element.appendChild(line);
-    };
 
     run() {
         let channelFound = window.location.href.match(this.#channelRegex);
@@ -97,13 +119,14 @@ class IrcReader {
            return;
         }
 
+        let channel = channelFound[1];
         let socket = new WebSocket(this.#socketAddress);
         socket.addEventListener("open", (event) => {
             socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
             socket.send(`PASS ${this.#password}`);
             socket.send(`NICK ${this.#username}`);
             socket.send(`USER ${this.#username} 8 * :${this.#username}`);
-            socket.send(`JOIN #${channelFound[1]}`);
+            socket.send(`JOIN #${channel}`);
         });
 
         socket.addEventListener("message", (event) => {
@@ -120,8 +143,12 @@ class IrcReader {
 
             let timeoutFound = event.data.match(this.#timeoutRegex);
             if (timeoutFound) {
-                this.#printTimeout(timeoutFound[3], timeoutFound[2]);
+                let user = timeoutFound[3];
+                let message = timeoutFound[2];
+                this.#chat.printTimeout(user, message, this.#lastMessage[user]);
             }
+
+            this.#chat.removeOldTimeout();
 
             // console.log(`Message from server: ${event.data}`);
         });
