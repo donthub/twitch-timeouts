@@ -74,20 +74,14 @@ class Chat {
     printTimeout(user, duration, lastMessage) {
         let message = duration ? `<strong>${user}</strong> <em>was timed out for</em> <strong>${this.#formatter.calculateDuration(duration)}</strong>.` : `<strong>${user}</strong> <em>was</em> <strong>permanently banned</strong>.`;
         if (lastMessage) {
-            let lastMessageHtml = document.createElement('div')
-                .appendChild(document.createTextNode(lastMessage))
-                .parentNode
-                .innerHTML;
-            message = `${message} <em>Last message:</em><br/>${lastMessageHtml}`;
+            message = `${message} <em>Last message:</em><br/>${this.#getHtmlMessage(lastMessage)}`;
         }
-        let line = document.createElement("div");
-        line.classList.add("chat-line__status", this.#customClass);
-        line.style.backgroundColor = "rgba(255, 0, 0, 0.3)";
-        let span = document.createElement("span");
-        span.innerHTML = message;
-        line.appendChild(span);
-        let element = document.querySelector(this.#chatLogSelector);
-        element.appendChild(line);
+        this.#appendMessage(message);
+    }
+
+    printClear(user, lastMessage) {
+        let message = `<strong>${user}</strong><em>'s message was cleared:</em><br/>${this.#getHtmlMessage(lastMessage)}`;
+        this.#appendMessage(message);
     }
 
     /**
@@ -101,17 +95,50 @@ class Chat {
         }
     }
 
+    #getHtmlMessage(message) {
+        return document.createElement('div')
+                .appendChild(document.createTextNode(message))
+                .parentNode
+                .innerHTML;
+    }
+
+    #appendMessage(message) {
+        let line = document.createElement("div");
+        line.classList.add("chat-line__status", this.#customClass);
+        line.style.backgroundColor = "rgba(255, 0, 0, 0.3)";
+        let span = document.createElement("span");
+        span.innerHTML = message;
+        line.appendChild(span);
+        let element = document.querySelector(this.#chatLogSelector);
+        element.appendChild(line);
+    }
+
 };
 
 class IrcReader {
     #socketAddress = "wss://irc-ws.chat.twitch.tv/";
     #channelRegex = /.*twitch\.tv\/(\w+)/;
-    #timeoutRegex = /@(ban-duration=(\d+))?.+ CLEARCHAT #\w+ :(.+)/;
-    #messageRegex = /@.*name=(.*?);.* PRIVMSG #\w+ :(.+)/;
     #username = `justinfan${Math.floor(Math.random() * 100000)}`; // Twitch default for anonymous users
     #password = "SCHMOOPIIE"; // Twitch default for anonymous users
     #chat = new Chat();
     #lastMessage = {};
+    #matchers = new Map([
+        [/@.*name=(.+?);.* PRIVMSG #\w+ :(.+)/, (found) => {
+            let name = found[1].toLowerCase();
+            let message = found[2];
+            this.#lastMessage[name] = message;
+        }],
+        [/@(ban-duration=(\d+))?.+ CLEARCHAT #\w+ :(.+)/, (found) => {
+            let user = found[3];
+            let message = found[2];
+            this.#chat.printTimeout(user, message, this.#lastMessage[user]);
+        }],
+        [/@.*login=(.+?);.+ CLEARMSG #\w+ :(.*)/, (found) => {
+            let user = found[1];
+            let message = found[2];
+            this.#chat.printClear(user, message);
+        }]
+    ]);
 
     run() {
         let channelFound = window.location.href.match(this.#channelRegex);
@@ -134,24 +161,19 @@ class IrcReader {
                 socket.send("PONG");
             }
 
-            let messageFound = event.data.match(this.#messageRegex);
-            if (messageFound) {
-                let name = messageFound[1].toLowerCase();
-                let message = messageFound[2];
-                this.#lastMessage[name] = message;
-            }
-
-            let timeoutFound = event.data.match(this.#timeoutRegex);
-            if (timeoutFound) {
-                let user = timeoutFound[3];
-                let message = timeoutFound[2];
-                this.#chat.printTimeout(user, message, this.#lastMessage[user]);
-            }
+            this.#matchers.forEach((process, regex) => {
+                let found = event.data.match(regex);
+                if (found) {
+                    process(found);
+                }
+            });
 
             this.#chat.removeOldTimeout();
 
             // console.log(`Message from server: ${event.data}`);
         });
+
+        console.log("Twitch timeouts UserScript is active!");
     }
 
 }
