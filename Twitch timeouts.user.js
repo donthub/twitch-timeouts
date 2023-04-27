@@ -96,7 +96,7 @@ class Chat {
     }
 
     #getHtmlMessage(message) {
-        return document.createElement('div')
+        return document.createElement("div")
                 .appendChild(document.createTextNode(message))
                 .parentNode
                 .innerHTML;
@@ -122,6 +122,7 @@ class IrcReader {
     #password = "SCHMOOPIIE"; // Twitch default for anonymous users
     #chat = new Chat();
     #lastMessage = {};
+    #channel;
     #matchers = new Map([
         [/@.*name=(.+?);.* PRIVMSG #\w+ :(.+)/, (found) => {
             let name = found[1].toLowerCase();
@@ -140,25 +141,44 @@ class IrcReader {
         }]
     ]);
 
-    run() {
+    #getChannelName() {
         let channelFound = window.location.href.match(this.#channelRegex);
         if (!channelFound) {
            return;
         }
+        return channelFound[1];
+    }
 
-        let channel = channelFound[1];
+    run() {
+        this.#channel = this.#getChannelName();
+        if (!this.#channel) {
+           return;
+        }
+
         let socket = new WebSocket(this.#socketAddress);
         socket.addEventListener("open", (event) => {
             socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
             socket.send(`PASS ${this.#password}`);
             socket.send(`NICK ${this.#username}`);
             socket.send(`USER ${this.#username} 8 * :${this.#username}`);
-            socket.send(`JOIN #${channel}`);
+            socket.send(`JOIN #${this.#channel}`);
+        });
+
+        window.addEventListener("locationchange", () => {
+            let currentChannel = this.#getChannelName();
+            if (currentChannel === this.#channel) {
+                return;
+            }
+
+            socket.send(`PART #${this.#channel}`);
+            this.#channel = currentChannel;
+            socket.send(`JOIN #${this.#channel}`);
         });
 
         socket.addEventListener("message", (event) => {
             if (event.data.startsWith("PING")) {
                 socket.send("PONG");
+                return;
             }
 
             this.#matchers.forEach((process, regex) => {
@@ -180,7 +200,7 @@ class IrcReader {
 
 
 (function() {
-    'use strict';
+    "use strict";
 
     new IrcReader().run();
 })();
