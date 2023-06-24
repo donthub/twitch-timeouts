@@ -141,6 +141,24 @@ class IrcReader {
         }]
     ]);
 
+    #initLocationChangeEvent() {
+        history.pushState = (f => function pushState() {
+            let ret = f.apply(this, arguments);
+            window.dispatchEvent(new Event('locationchange'));
+            return ret;
+        })(history.pushState);
+
+        history.replaceState = (f => function replaceState() {
+            let ret = f.apply(this, arguments);
+            window.dispatchEvent(new Event('locationchange'));
+            return ret;
+        })(history.replaceState);
+
+        window.addEventListener('popstate', () => {
+            window.dispatchEvent(new Event('locationchange'))
+        });
+    }
+
     #getChannelName() {
         let channelFound = window.location.href.match(this.#channelRegex);
         if (!channelFound) {
@@ -163,6 +181,8 @@ class IrcReader {
             socket.send(`USER ${this.#username} 8 * :${this.#username}`);
             socket.send(`JOIN #${this.#channel}`);
         });
+
+        this.#initLocationChangeEvent();
 
         window.addEventListener("locationchange", () => {
             let currentChannel = this.#getChannelName();
